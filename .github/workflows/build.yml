@@ -2,7 +2,12 @@ name: build-bulkwart-default-de
 on:
   schedule:
     - cron: '17 4 * * *'
-  workflow_dispatch: {}
+  workflow_dispatch:
+    inputs:
+      force:
+        description: 'Rebuild auch wenn Tag schon existiert (z.B. nach Patch-Aenderung)'
+        type: boolean
+        default: false
 permissions:
   contents: read
   packages: write
@@ -27,7 +32,9 @@ jobs:
       - name: Schon gebaut?
         id: chk
         run: |
-          if docker manifest inspect ghcr.io/${{ github.repository_owner }}/bulkwart-default-de:${{ steps.up.outputs.tag }} >/dev/null 2>&1; then
+          if [ "${{ github.event.inputs.force }}" = "true" ]; then
+            echo "skip=false" >> "$GITHUB_OUTPUT"; echo "force=true -> rebuild erzwungen."
+          elif docker manifest inspect ghcr.io/${{ github.repository_owner }}/bulkwart-default-de:${{ steps.up.outputs.tag }} >/dev/null 2>&1; then
             echo "skip=true" >> "$GITHUB_OUTPUT"; echo "Tag bereits gebaut, skip."
           else
             echo "skip=false" >> "$GITHUB_OUTPUT"
@@ -38,6 +45,20 @@ jobs:
         with:
           repository: bulwarkmail/webmail
           ref: ${{ steps.up.outputs.tag }}
+      - name: Client-Default-Locale auf de patchen
+        if: steps.chk.outputs.skip == 'false'
+        run: |
+          f=components/providers/intl-provider.tsx
+          test -f "$f"
+          # Guards: bricht ab wenn Upstream die Stellen umbaut (dann Patch anpassen)
+          grep -q 'useState(initialLocale)' "$f"
+          grep -q 'setLocale(initialLocale)' "$f"
+          # Build-Default (= NEXT_PUBLIC_DEFAULT_LOCALE) importieren + Client-Store darauf zwingen
+          sed -i "/import { useLocaleStore }/a import { defaultLocale as buildDefaultLocale } from '@/i18n/routing';" "$f"
+          sed -i 's/useState(initialLocale)/useState(currentLocale || buildDefaultLocale)/' "$f"
+          sed -i 's/setLocale(initialLocale)/setLocale(buildDefaultLocale)/' "$f"
+          echo '--- patched ---'
+          grep -nE "buildDefaultLocale|useState\(currentLocale" "$f"
       - name: Build & Push (de-Default)
         if: steps.chk.outputs.skip == 'false'
         uses: docker/build-push-action@v6
