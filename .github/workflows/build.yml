@@ -1,0 +1,50 @@
+name: build-bulkwart-default-de
+on:
+  schedule:
+    - cron: '17 4 * * *'
+  workflow_dispatch: {}
+permissions:
+  contents: read
+  packages: write
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Login GHCR
+        uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+      - name: Neuesten Upstream-Tag holen
+        id: up
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          tag=$(gh api repos/bulwarkmail/webmail/tags --paginate --jq '.[].name' | sort -V | tail -1)
+          echo "tag=$tag" >> "$GITHUB_OUTPUT"
+          echo "Latest upstream tag: $tag"
+      - name: Schon gebaut?
+        id: chk
+        run: |
+          if docker manifest inspect ghcr.io/${{ github.repository_owner }}/bulkwart-default-de:${{ steps.up.outputs.tag }} >/dev/null 2>&1; then
+            echo "skip=true" >> "$GITHUB_OUTPUT"; echo "Tag bereits gebaut, skip."
+          else
+            echo "skip=false" >> "$GITHUB_OUTPUT"
+          fi
+      - name: Upstream @ Tag auschecken
+        if: steps.chk.outputs.skip == 'false'
+        uses: actions/checkout@v4
+        with:
+          repository: bulwarkmail/webmail
+          ref: ${{ steps.up.outputs.tag }}
+      - name: Build & Push (de-Default)
+        if: steps.chk.outputs.skip == 'false'
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          build-args: NEXT_PUBLIC_DEFAULT_LOCALE=de
+          push: true
+          tags: |
+            ghcr.io/${{ github.repository_owner }}/bulkwart-default-de:${{ steps.up.outputs.tag }}
+            ghcr.io/${{ github.repository_owner }}/bulkwart-default-de:latest
