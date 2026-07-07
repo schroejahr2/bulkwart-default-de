@@ -59,6 +59,18 @@ jobs:
           sed -i 's/setLocale(initialLocale)/setLocale(buildDefaultLocale)/' "$f"
           echo '--- patched ---'
           grep -nE "buildDefaultLocale|useState\(currentLocale" "$f"
+      - name: Server-URL-Anzeige durch Mail-Domain ersetzen (Org-Trennung)
+        if: steps.chk.outputs.skip == 'false'
+        run: |
+          f=components/settings/account-settings.tsx
+          test -f "$f"
+          # Guards: bricht ab wenn Upstream die Stellen umbaut (dann Patch anpassen)
+          grep -qF "{serverUrl || t('../../common.unknown')}" "$f"
+          grep -qF "{hostnameOf(account.serverUrl)}" "$f"
+          sed -i "s#{serverUrl || t('../../common.unknown')}#{(email || '').split('@')[1] || t('../../common.unknown')}#" "$f"
+          sed -i "s#{hostnameOf(account.serverUrl)}#{(account.email || account.username || '').split('@')[1] || ''}#" "$f"
+          echo '--- patched ---'
+          grep -n "split('@')" "$f"
       - name: Build & Push (de-Default)
         if: steps.chk.outputs.skip == 'false'
         uses: docker/build-push-action@v6
