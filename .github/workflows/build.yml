@@ -71,6 +71,18 @@ jobs:
           sed -i "s#{hostnameOf(account.serverUrl)}#{(account.email || account.username || '').split('@')[1] || ''}#" "$f"
           echo '--- patched ---'
           grep -n "split('@')" "$f"
+      - name: TOTP-Toggle auf Login-Seite entfernen (Keycloak macht 2FA)
+        if: steps.chk.outputs.skip == 'false'
+        run: |
+          f='app/(main)/[locale]/login/page.tsx'
+          test -f "$f"
+          # Guards: bricht ab wenn Upstream die Stelle umbaut (dann Patch anpassen)
+          grep -qF '{!showTotpField ? (' "$f"
+          grep -qF 'totp_toggle' "$f"
+          sed -i '/{!showTotpField ? (/,/) : (/c\
+                  {showTotpField \&\& (' "$f"
+          grep -qF '{showTotpField && (' "$f"
+          echo '--- patched: manueller 2FA-Toggle entfernt, Auto-Show (totp_required) bleibt ---'
       - name: Build & Push (de-Default)
         if: steps.chk.outputs.skip == 'false'
         uses: docker/build-push-action@v6
