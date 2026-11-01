@@ -31,3 +31,17 @@ aktiviert: Upstream schaltet nur bei iOS und bei `pdfViewerEnabled === false`
 auf pdf.js um; ein installiertes PWA-Fenster meldet aber weiterhin `true`,
 waehrend Chromium dort keinen PDF-Viewer bereitstellt -> leeres `<iframe>`.
 Patch 12 ergaenzt die `display-mode`-Erkennung und ist damit wieder im Workflow.
+
+## 01.11.2026: Patch 12 auf Upstream-Helper umgestellt (v2)
+
+Upstream hat seit 1.16 `isStandaloneDisplayMode()` in `lib/standalone-display.ts`
+(#865; standalone / fullscreen / window-controls-overlay + `navigator.standalone`,
+SSR-sicher), nutzt ihn aber nur fuer `window.open`, nicht fuer die PDF-Weiche.
+Patch 12 v2 importiert den Helper und ergaenzt nur `if (isIOS || isStandaloneDisplayMode())`.
+Die alte Fassung mit eigener display-mode-Erkennung liegt als `patch12-v1.py` hier.
+`minimal-ui` faellt dabei weg — irrelevant, das Manifest setzt `display: "standalone"`.
+
+Fuer den geplanten Upstream-PR: drei Tests mocken `@/lib/standalone-display` nur mit
+`canOpenUrlInNewWindow` (`file-preview-modal-history`, `files-overlays-focus`,
+`preview-shell`) und brauchen zusaetzlich `isStandaloneDisplayMode: () => false`,
+sonst 16 rote Tests. Mit ergaenzten Mocks: 111/111 gruen (gegen 1.19.1).
